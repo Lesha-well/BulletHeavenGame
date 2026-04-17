@@ -3,8 +3,8 @@
     public static class GameConstants
     {
         // Окно и камера
-        public const int WindowWidth = 1920;
-        public const int WindowHeight = 1080;
+        public const int WindowWidth = 1280;
+        public const int WindowHeight = 720;
         public const int CameraDeadZoneWidth = 320;
         public const int CameraDeadZoneHeight = 180;
 
