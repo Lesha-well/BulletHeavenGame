@@ -26,7 +26,19 @@ namespace BulletHeavenGame
         float shootTimer = 0f;
         float bossSpawnTimer = GameConstants.BossSpawnInterval;
         Random mainThreadRnd = new Random();
+        
+        
+        // Состояние игры и счётчики
+        int enemiesKilled = 0;
+        int bossesKilled = 0;
+        float gameTimeTotal = 0f;
+        bool isGameOver = false;
 
+        // Для меню
+        float menuOffsetY = 0f; // Для анимации выплывания
+        SpriteFont gameFont; 
+        Texture2D blackPixel; // Для фона меню
+        
         Vector2 cameraOffset = Vector2.Zero;
         KeyboardState previousKeyboardState;
 
@@ -74,6 +86,15 @@ namespace BulletHeavenGame
             bossTexture = CreateColoredTexture(80, 80, Color.DarkMagenta);
 
             player.Texture = playerTexture;
+            
+            gameFont = Content.Load<SpriteFont>("font");
+
+            // Пиксель для отрисовки прямоугольников (меню)
+            blackPixel = new Texture2D(GraphicsDevice, 1, 1);
+            blackPixel.SetData(new[] { Color.White });
+
+            player.Texture = playerTexture;
+            menuOffsetY = GameConstants.WindowHeight; // Меню изначально за экраном
         }
 
         private Texture2D CreateColoredTexture(int width, int height, Color color)
@@ -91,6 +112,19 @@ namespace BulletHeavenGame
             if (currentKeyboard.IsKeyDown(Keys.Escape)) Exit();
 
             var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (isGameOver)
+            {
+                // Анимация меню (выползает снизу)
+                menuOffsetY = MathHelper.Lerp(menuOffsetY, 0, 0.1f);
+
+                if (currentKeyboard.IsKeyDown(Keys.R)) RestartGame();
+                if (currentKeyboard.IsKeyDown(Keys.Escape)) Exit();
+                return;
+            }
+            
+            gameTimeTotal += dt;
+            
             var mouse = Mouse.GetState();
             var mouseWorld = new Vector2(mouse.X + cameraOffset.X, mouse.Y + cameraOffset.Y);
 
@@ -117,11 +151,31 @@ namespace BulletHeavenGame
 
             // Очистка
             CleanupDeadEntities();
-
+            
+            if (player.Health <= 0)
+            {
+                player.Health = 0;
+                isGameOver = true;
+            }
+            
             previousKeyboardState = currentKeyboard;
             base.Update(gameTime);
         }
-
+        
+        private void RestartGame()
+        {
+            player.Reset();
+            player.Position = new Vector2(GameConstants.WindowWidth / 2f, GameConstants.WindowHeight / 2f);
+            enemies.Clear();
+            bullets.Clear();
+            powerUps.Clear();
+            enemiesKilled = 0;
+            bossesKilled = 0;
+            gameTimeTotal = 0f;
+            isGameOver = false;
+            menuOffsetY = GameConstants.WindowHeight;
+        }
+        
         private void HandlePlayerMovement(KeyboardState keyboard, float dt)
         {
             var movement = Vector2.Zero;
@@ -326,7 +380,7 @@ namespace BulletHeavenGame
 
                 bullets.Add(new Bullet
                 {
-                    Position = player.Position,
+                    Position = player.Position + new Vector2(0, 15),
                     Velocity = shootDir * GameConstants.BulletSpeed,
                     Texture = bulletTexture
                 });
@@ -472,7 +526,9 @@ namespace BulletHeavenGame
 
                 if (playerBounds.Intersects(eBounds))
                 {
-                    player.Health -= player.Damage; 
+                    if (e is Boss)
+                        player.Health -= player.BossDamage;
+                    else player.Health -= player.Damage;
                     KillEnemy(e);
                 }
             }
@@ -483,11 +539,13 @@ namespace BulletHeavenGame
             e.IsDead = true;
             if (e is Boss boss)
             {
+                bossesKilled++;
                 boss.Health = 0;
                 TriggerBossExplosion(boss);
             }
             else if (e.Health <= 0) // Спавн лута только если убит оружием
             {
+                enemiesKilled++;
                 SpawnLoot(e.Position);
                 e.Health = 1; // Защита от двойного спавна
             }
@@ -534,7 +592,7 @@ namespace BulletHeavenGame
                 if (playerBounds.Intersects(pBounds))
                 {
                     if (p.ItemType == PowerUp.Type.Health)
-                        player.Health = Math.Min(player.Health + 20, 100);
+                        player.Health = Math.Min(player.Health + 20, 500);
 
                     p.IsDead = true;
                 }
@@ -643,7 +701,31 @@ namespace BulletHeavenGame
             // Боссы сверху
             foreach (var boss in bosses)
                 spriteBatch.Draw(boss.Texture, boss.Position - cameraOffset, boss.Tint);
+            
+            // HUD
+            spriteBatch.Draw(blackPixel, new Rectangle(15, GameConstants.WindowHeight - 210, 155, 45), Color.White);
+            spriteBatch.DrawString(gameFont, $"Health: {player.Health}%", 
+                new Vector2(20, GameConstants.WindowHeight - 200), Color.Red);
+            var enemyText = $"Killed: {enemiesKilled}";
+            var bossText = $"Bosses: {bossesKilled}";
+            spriteBatch.DrawString(gameFont, enemyText, 
+                new Vector2(GameConstants.WindowWidth - 300, GameConstants.WindowHeight - 100), Color.White);
+            spriteBatch.DrawString(gameFont, bossText, 
+                new Vector2(GameConstants.WindowWidth - 300, GameConstants.WindowHeight - 75), Color.White);
+            
+            if (isGameOver)
+            {
+                // Затемнение
+                spriteBatch.Draw(blackPixel, new Rectangle(0, 0, GameConstants.WindowWidth, GameConstants.WindowHeight), Color.Black * 0.5f);
 
+                // Плашка меню
+                var menuRect = new Rectangle(GameConstants.WindowWidth / 2 - 200, (int)menuOffsetY + GameConstants.WindowHeight / 2 - 150, 400, 300);
+                spriteBatch.Draw(blackPixel, menuRect, Color.DarkSlateGray);
+
+                var stats = $"GAME OVER\n\nEnemies: {enemiesKilled}\nBosses: {bossesKilled}\nTime: {(int)gameTimeTotal}s\n\n[R] Play Again  [Esc] Exit";
+                spriteBatch.DrawString(gameFont, stats, new Vector2(menuRect.X + 50, menuRect.Y + 50), Color.White);
+            }
+            
             spriteBatch.End();
             base.Draw(gameTime);
         }

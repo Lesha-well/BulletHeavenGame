@@ -13,8 +13,15 @@ namespace BulletHeavenGame
 
     public class Player : GameObject
     {
-        public int Health = 100;
-        public int Damage = 20; // Чтобы потом бафы применять
+        public int Health = 500;
+        public int Damage = 20;
+        public int BossDamage = 100;
+
+        public void Reset()
+        {
+            Health = 500;
+            IsDead = false;
+        }
     }
 
     public class Enemy : GameObject
